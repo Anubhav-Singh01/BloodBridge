@@ -1,4 +1,4 @@
-# Environment
+# Environment (real secrets live in local .env files and are never committed)
 .env
 .env.*
 !.env.example
@@ -7,7 +7,7 @@
 node_modules/
 npm-debug.log*
 
-# Build
+# Build output
 dist/
 build/
 
@@ -16,10 +16,17 @@ build/
 __pycache__/
 *.py[cod]
 
-# ML
-models/*.pkl
-models/*.joblib
-models/*.onnx
+# Test coverage and logs
+coverage/
+logs/
+*.log
+
+# ML: trained model artifacts, laid out as in ML.md:
+#   ml-service/models/<model_version>/model.joblib
+#   ml-service/models/<model_version>/metadata.json
+# Anchored to ml-service/models/ so the ml-service/app/models/ code package is NOT ignored.
+ml-service/models/*
+!ml-service/models/.gitkeep
 
 # IDE
 .vscode/
@@ -28,6 +35,4 @@ models/*.onnx
 # OS
 .DS_Store
 Thumbs.db
-
-# Logs
-*.log
+Desktop.ini

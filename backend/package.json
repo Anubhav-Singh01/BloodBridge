@@ -1,14 +1,21 @@
 {
   "name": "backend",
-  "version": "1.0.0",
-  "main": "index.js",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "BloodBridge AI backend API (Express + TypeScript)",
   "dependencies": {
     "@clerk/express": "^2.1.69",
     "cors": "^2.8.6",
@@ -22,7 +29,7 @@
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
-    "@types/node": "^26.6.2",
+    "@types/node": "^22.20.4",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
   }
