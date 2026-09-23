@@ -10,7 +10,16 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tools.json",
+    "test": "vitest run",
+    "db:generate": "tsx scripts/db-generate.ts",
+    "db:check": "drizzle-kit check",
+    "db:target": "tsx scripts/db-target.ts",
+    "db:probe": "tsx scripts/db-probe.ts",
+    "db:migrate": "tsx scripts/db-migrate.ts",
+    "db:test:migrate": "tsx scripts/db-test-migrate.ts",
+    "test:db": "vitest run --config vitest.db.config.ts",
+    "db:seed": "tsx scripts/db-seed.ts"
   },
   "keywords": [],
   "author": "",
@@ -30,7 +39,10 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^22.20.4",
+    "drizzle-kit": "^0.31.10",
     "tsx": "^4.23.13",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
   }
 }

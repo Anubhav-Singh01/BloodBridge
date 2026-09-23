@@ -1,6 +1,6 @@
 # BloodBridge AI: Architecture (Phase 1 draft)
 
-Status: design for review. No application code exists yet.
+Status: design, reviewed. Phase 2 (service scaffolding for `frontend/`, `backend/` and `ml-service/`) and Phase 3 (the database schema, migrations and seeds under `backend/`) are implemented; the matching, ranking, notification and admin behavior described below is not yet built. This document remains the source of truth for that behavior as it is implemented.
 BloodBridge AI is a software platform, not a medical authority. Medical eligibility and compatibility are confirmed by facilities and qualified professionals.
 
 ## 1. System overview

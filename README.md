@@ -47,9 +47,12 @@ Not implemented yet: authentication flows, database schema and migrations, donor
 
 ### Known Phase 2 limitations
 
-- **`GET /ready` (backend)** only checks that configuration loaded. The database readiness check described in API.md is not implemented yet. Phase 2 never connects to Neon or queries any database. It will be completed in the database/backend infrastructure phase. Until then, `/ready` must not be treated as a real readiness signal.
 - **Frontend** is a placeholder page. Routing, Clerk, TanStack Query, Axios, React Hook Form and Zod are installed as dependencies but not wired up yet, and there are no API calls.
 - **ML service** exposes `GET /health` and `GET /model` only. There is no `/predict` endpoint, no model is loaded for prediction, and no model has been trained. `/model` only returns the validated contents of a model's `metadata.json`; it never loads the model file.
+
+### Known dev-tooling issue
+
+`npm audit` in `backend/` reports 4 moderate advisories. They are one chain: `drizzle-kit@0.31.10` depends on the deprecated `@esbuild-kit/esm-loader`, which brings in an old esbuild (advisory GHSA-67mh-4wv8-2f99, about esbuild's own dev server). It affects development tooling only, and drizzle-kit does not run that server. No override or downgrade is applied (`npm audit fix --force` would downgrade drizzle-kit to 0.18.1). Revisit before production, or when a stable Drizzle Kit release removes the dependency.
 
 ## Local development
 
@@ -102,3 +105,16 @@ cd frontend && npm run lint && npm run build
 # ML service (virtual environment active)
 cd ml-service && pip check && python -c "import app.main"
 ```
+
+### Database integration tests (backend)
+
+`backend/tests/db/` runs real SQL against a dedicated Neon **test** branch (never dev or production) to prove the schema's own constraints, triggers and concurrency guarantees. It needs `TEST_DATABASE_URL` (the direct, non-pooled endpoint) and `CONFIRM_TEST_DB_HOST` set in `backend/.env` (see `.env.example`), and that branch already migrated:
+
+```bash
+cd backend
+npm run db:test:migrate                                          # plan only; review the fingerprint it prints
+npm run db:test:migrate -- --apply --confirm-plan=<fingerprint>   # applies, only after reviewing the plan
+npm run test:db                                                   # resets the test branch, then runs the suite
+```
+
+`npm test` (the default, always-offline suite) never touches a database and is unaffected.

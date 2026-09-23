@@ -1,6 +1,7 @@
 import { createApp } from './app.js';
 import { env } from './config/env.js';
-import { log } from './utils/logger.js';
+import { closePool } from './db/connection.js';
+import { describeError, log } from './utils/logger.js';
 
 const app = createApp();
 
@@ -23,7 +24,12 @@ server.on('error', (error: Error) => {
 
 function shutdown(signal: string): void {
   log('info', 'shutting down', { signal });
-  server.close(() => process.exit(0));
+  server.close(() => {
+    // Stop accepting new connections and let in-flight requests finish first, then close the pool.
+    closePool()
+      .catch((error: unknown) => log('warn', 'pool close failed', describeError(error)))
+      .finally(() => process.exit(0));
+  });
   setTimeout(() => process.exit(1), 10_000).unref();
 }
 
