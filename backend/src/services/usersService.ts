@@ -1,5 +1,6 @@
 import * as dataDeletionRequestsRepository from '../repositories/dataDeletionRequests.repository.js';
 import type { DeletionSource } from '../repositories/dataDeletionRequests.repository.js';
+import * as donorsRepository from '../repositories/donors.repository.js';
 import * as userRolesRepository from '../repositories/userRoles.repository.js';
 import type { RoleCode } from '../repositories/userRoles.repository.js';
 import * as usersRepository from '../repositories/users.repository.js';
@@ -15,6 +16,12 @@ function isUniqueViolation(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: unknown }).code === '23505';
 }
 
+export interface DonorSummary {
+  verificationStatus: 'PENDING' | 'UNDER_REVIEW' | 'VERIFIED' | 'REJECTED';
+  bloodGroup: string;
+  availabilityStatus: 'AVAILABLE' | 'UNAVAILABLE' | 'TEMPORARILY_UNAVAILABLE';
+}
+
 export interface AuthMe {
   id: string;
   status: string;
@@ -23,9 +30,12 @@ export interface AuthMe {
   email: string | null;
   phone: string | null;
   phoneVerified: boolean;
-  // Facility membership and donor/patient verification status are not part of this batch (no
-  // facility_memberships, donors, or patients repository exists yet) - reported as empty/absent
-  // rather than guessed.
+  // Batch 3.12 fills this in for real; Batch 3.10 reserved the field but always returned null since
+  // no donor profile could exist yet. Patient verification status stays reserved (patients aren't
+  // built yet). This is a summary only, not the full donor resource - see GET /donors/me/verification
+  // and the other /donors/me/* endpoints for that.
+  donor: DonorSummary | null;
+  // Facility membership is not part of this batch.
   facilityMemberships: never[];
 }
 
@@ -34,6 +44,7 @@ export async function getAuthMe(userId: string): Promise<AuthMe> {
   if (!user) throw new AppError(401, 'UNAUTHENTICATED', 'User not found.');
   const profile = await usersRepository.findProfileByUserId(userId);
   const roles = await userRolesRepository.listRoleCodesForUser(userId);
+  const donor = await donorsRepository.findByUserId(userId);
   return {
     id: user.id,
     status: user.status,
@@ -42,6 +53,7 @@ export async function getAuthMe(userId: string): Promise<AuthMe> {
     email: profile?.email ?? null,
     phone: profile?.phone ?? null,
     phoneVerified: profile?.phoneVerifiedAt != null,
+    donor: donor ? { verificationStatus: donor.verificationStatus, bloodGroup: donor.bloodGroup, availabilityStatus: donor.availabilityStatus } : null,
     facilityMemberships: [],
   };
 }

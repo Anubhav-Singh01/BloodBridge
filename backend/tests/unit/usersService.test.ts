@@ -18,6 +18,9 @@ vi.mock('../../src/repositories/dataDeletionRequests.repository.js', () => ({
   findPendingForUser: vi.fn(),
   createPending: vi.fn(),
 }));
+vi.mock('../../src/repositories/donors.repository.js', () => ({
+  findByUserId: vi.fn(),
+}));
 vi.mock('../../src/services/auditService.js', () => ({
   record: vi.fn(),
 }));
@@ -25,6 +28,7 @@ vi.mock('../../src/services/auditService.js', () => ({
 const usersRepository = await import('../../src/repositories/users.repository.js');
 const userRolesRepository = await import('../../src/repositories/userRoles.repository.js');
 const dataDeletionRequestsRepository = await import('../../src/repositories/dataDeletionRequests.repository.js');
+const donorsRepository = await import('../../src/repositories/donors.repository.js');
 const auditService = await import('../../src/services/auditService.js');
 const { AppError } = await import('../../src/utils/appError.js');
 const usersService = await import('../../src/services/usersService.js');
@@ -116,10 +120,11 @@ describe('requestDeletion', () => {
 });
 
 describe('getAuthMe', () => {
-  it('assembles id, status, roles and profile fields, and reports an empty facilityMemberships list', async () => {
+  it('assembles id, status, roles and profile fields, reports null donor with no profile yet, and an empty facilityMemberships list', async () => {
     vi.mocked(usersRepository.findById).mockResolvedValue({ id: 'user-1', clerkUserId: 'clerk_1', status: 'ACTIVE' });
     vi.mocked(usersRepository.findProfileByUserId).mockResolvedValue({ fullName: 'Anu Bhav', email: 'a@example.com', phone: null, phoneVerifiedAt: null, dateOfBirth: null, address: null });
     vi.mocked(userRolesRepository.listRoleCodesForUser).mockResolvedValue(['DONOR']);
+    vi.mocked(donorsRepository.findByUserId).mockResolvedValue(undefined);
 
     const result = await usersService.getAuthMe('user-1');
 
@@ -131,8 +136,31 @@ describe('getAuthMe', () => {
       email: 'a@example.com',
       phone: null,
       phoneVerified: false,
+      donor: null,
       facilityMemberships: [],
     });
+  });
+
+  it('Batch 3.12: fills in the real donor summary once a donor profile exists', async () => {
+    vi.mocked(usersRepository.findById).mockResolvedValue({ id: 'user-1', clerkUserId: 'clerk_1', status: 'ACTIVE' });
+    vi.mocked(usersRepository.findProfileByUserId).mockResolvedValue(undefined);
+    vi.mocked(userRolesRepository.listRoleCodesForUser).mockResolvedValue(['DONOR']);
+    vi.mocked(donorsRepository.findByUserId).mockResolvedValue({
+      id: 'donor-1',
+      userId: 'user-1',
+      bloodGroup: 'O_POS',
+      verificationStatus: 'VERIFIED',
+      availabilityStatus: 'AVAILABLE',
+      availabilityUntil: null,
+      nextEligibleDonationAt: null,
+      currentEligibilityCalcId: null,
+      selfReportedEligibility: null,
+      status: 'ACTIVE',
+    });
+
+    const result = await usersService.getAuthMe('user-1');
+
+    expect(result.donor).toEqual({ verificationStatus: 'VERIFIED', bloodGroup: 'O_POS', availabilityStatus: 'AVAILABLE' });
   });
 
   it('throws AppError(401) if the user row is gone', async () => {

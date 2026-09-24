@@ -62,12 +62,20 @@ export async function withTwoConnections<T>(work: (a: postgres.ReservedSql, b: p
   }
 }
 
-/** Asserts that `fn()` rejects with a Postgres error carrying exactly `sqlstate` (D11: exact SQLSTATE, not "any error"). */
+/**
+ * Asserts that `fn()` rejects with a Postgres error carrying exactly `sqlstate` (D11: exact
+ * SQLSTATE, not "any error"). Falls back to `error.cause.code` because a `fn` that goes through a
+ * Drizzle-ORM repository/service (rather than a raw `sql` tagged-template call) rejects with a
+ * `DrizzleQueryError` wrapper whose own `.code` is undefined - the original postgres.js error (with
+ * the real `.code`) is only preserved as `.cause` (see drizzle-orm/pg-core/session.js's
+ * `queryWithCache`). Every existing raw-`sql` caller already has `.code` set directly, so this
+ * fallback is unreachable for them and changes nothing about their behavior.
+ */
 export async function expectSqlState(fn: () => Promise<unknown>, sqlstate: string): Promise<void> {
   try {
     await fn();
   } catch (error) {
-    const code = (error as { code?: unknown } | undefined)?.code;
+    const code = (error as { code?: unknown } | undefined)?.code ?? (error as { cause?: { code?: unknown } } | undefined)?.cause?.code;
     if (code === sqlstate) return;
     throw new Error(`expected SQLSTATE ${sqlstate}, got ${String(code)}: ${error instanceof Error ? error.message : String(error)}`);
   }

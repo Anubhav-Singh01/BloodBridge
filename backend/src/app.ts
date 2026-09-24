@@ -7,6 +7,8 @@ import { errorHandler } from './middlewares/errorHandler.js';
 import { notFound } from './middlewares/notFound.js';
 import { requestId } from './middlewares/requestId.js';
 import { authRouter } from './routes/auth.routes.js';
+import { donationRecordsRouter } from './routes/donationRecords.routes.js';
+import { donorsRouter } from './routes/donors.routes.js';
 import { facilitiesRouter } from './routes/facilities.routes.js';
 import { infraRouter } from './routes/infra.routes.js';
 import { usersRouter } from './routes/users.routes.js';
@@ -37,6 +39,8 @@ export function createApp(): Express {
   app.use(authRouter);
   app.use(usersRouter);
   app.use(facilitiesRouter);
+  app.use(donorsRouter);
+  app.use(donationRecordsRouter);
 
   // Error handling comes last: unknown routes become a 404, and every error ends up in errorHandler.
   app.use(notFound);

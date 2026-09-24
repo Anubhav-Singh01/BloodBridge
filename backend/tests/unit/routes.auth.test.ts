@@ -40,12 +40,16 @@ vi.mock('../../src/repositories/dataDeletionRequests.repository.js', () => ({
   findPendingForUser: vi.fn(),
   createPending: vi.fn(),
 }));
+vi.mock('../../src/repositories/donors.repository.js', () => ({
+  findByUserId: vi.fn(),
+}));
 vi.mock('../../src/services/auditService.js', () => ({ record: vi.fn() }));
 
 const { getAuth } = await import('@clerk/express');
 const usersRepository = await import('../../src/repositories/users.repository.js');
 const userRolesRepository = await import('../../src/repositories/userRoles.repository.js');
 const dataDeletionRequestsRepository = await import('../../src/repositories/dataDeletionRequests.repository.js');
+const donorsRepository = await import('../../src/repositories/donors.repository.js');
 const { createApp } = await import('../../src/app.js');
 
 const app = createApp();
@@ -76,10 +80,33 @@ describe('GET /api/v1/auth/me', () => {
     signedIn('ACTIVE', ['DONOR']);
     vi.mocked(usersRepository.findById).mockResolvedValue({ id: 'user-1', clerkUserId: 'clerk_1', status: 'ACTIVE' });
     vi.mocked(usersRepository.findProfileByUserId).mockResolvedValue({ fullName: 'Anu', email: 'a@example.com', phone: null, phoneVerifiedAt: null, dateOfBirth: null, address: null });
+    vi.mocked(donorsRepository.findByUserId).mockResolvedValue(undefined);
 
     const res = await supertest(app).get('/api/v1/auth/me');
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ success: true, data: { id: 'user-1', roles: ['DONOR'], fullName: 'Anu' } });
+    expect(res.body).toMatchObject({ success: true, data: { id: 'user-1', roles: ['DONOR'], fullName: 'Anu', donor: null } });
+  });
+
+  it('Batch 3.12: includes the donor summary in the envelope once a donor profile exists', async () => {
+    signedIn('ACTIVE', ['DONOR']);
+    vi.mocked(usersRepository.findById).mockResolvedValue({ id: 'user-1', clerkUserId: 'clerk_1', status: 'ACTIVE' });
+    vi.mocked(usersRepository.findProfileByUserId).mockResolvedValue({ fullName: 'Anu', email: 'a@example.com', phone: null, phoneVerifiedAt: null, dateOfBirth: null, address: null });
+    vi.mocked(donorsRepository.findByUserId).mockResolvedValue({
+      id: 'donor-1',
+      userId: 'user-1',
+      bloodGroup: 'B_POS',
+      verificationStatus: 'PENDING',
+      availabilityStatus: 'AVAILABLE',
+      availabilityUntil: null,
+      nextEligibleDonationAt: null,
+      currentEligibilityCalcId: null,
+      selfReportedEligibility: null,
+      status: 'ACTIVE',
+    } as never);
+
+    const res = await supertest(app).get('/api/v1/auth/me');
+    expect(res.status).toBe(200);
+    expect(res.body.data.donor).toEqual({ verificationStatus: 'PENDING', bloodGroup: 'B_POS', availabilityStatus: 'AVAILABLE' });
   });
 });
 

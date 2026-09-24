@@ -32,6 +32,16 @@ declare global {
         verificationStatus: 'PENDING' | 'UNDER_REVIEW' | 'VERIFIED' | 'REJECTED';
         membershipRole: MembershipRole;
       };
+      /** Set by middlewares/donorAuth.ts's requireDonorProfile() once the caller's own donor row is confirmed to exist. */
+      donor?: {
+        id: string;
+        userId: string;
+      };
+      /** Set by middlewares/donationAuth.ts's requireDonationReviewAccess() once ADMIN or facility-membership access to this donation record is confirmed. */
+      donation?: {
+        id: string;
+        donorId: string;
+      };
     }
   }
 }
