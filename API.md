@@ -19,7 +19,7 @@ Error rules:
 - Responses never contain stack traces, SQL or driver errors, file paths, secrets, environment values, or sensitive donor information (identity, contact, exact location, eligibility internals). Internal detail goes to server logs only, tagged with the request id.
 - Unexpected failures return `INTERNAL_ERROR` with a generic message and the `requestId`, so support can find the log line.
 
-Status and code map: 400 `VALIDATION_ERROR`; 401 `UNAUTHENTICATED`; 403 `FORBIDDEN`; 404 `NOT_FOUND`; 409 `CONFLICT` or `INVALID_STATE_TRANSITION`; 429 `RATE_LIMITED`; 500 `INTERNAL_ERROR`; 503 `SERVICE_UNAVAILABLE`. Domain codes (for example `DONOR_NOT_ELIGIBLE`, `WINDOW_CLOSED`, `ALREADY_RESPONDED`, `ROLE_NOT_SELF_ASSIGNABLE`) use the same envelope with the closest HTTP status. For object-level scoping (a resource belonging to a facility or user the caller has no relation to), the API returns 404 instead of 403 so existence is not leaked.
+Status and code map: 400 `VALIDATION_ERROR`; 401 `UNAUTHENTICATED`; 403 `FORBIDDEN`; 404 `NOT_FOUND`; 409 `CONFLICT` or `INVALID_STATE_TRANSITION`; 429 `RATE_LIMITED`; 500 `INTERNAL_ERROR`; 503 `SERVICE_UNAVAILABLE`. Domain codes (for example `DONOR_NOT_ELIGIBLE`, `WINDOW_CLOSED`, `ALREADY_RESPONDED`, `ROLE_NOT_SELF_ASSIGNABLE`, `LAST_FACILITY_ADMIN` — 409, refusing to remove a facility's last ACTIVE FACILITY_ADMIN, section 7) use the same envelope with the closest HTTP status. For object-level scoping (a resource belonging to a facility or user the caller has no relation to), the API returns 404 instead of 403 so existence is not leaked.
 
 ### 1.2 Request correlation (`X-Request-ID`)
 - Every response carries an `X-Request-ID` header.
@@ -281,7 +281,10 @@ No user endpoint can trigger a system-only transition. Terminal states accept no
 | GET | /hospitals/:id, /blood-banks/:id | Pub (VERIFIED, public fields) / F:ADMIN(id) (full) | |
 | PATCH | /hospitals/:id, /blood-banks/:id | F:ADMIN(id) | Profile update. Verification-relevant changes reset status to UNDER_REVIEW |
 | POST | /hospitals/:id/verification, /blood-banks/:id/verification | F:ADMIN(id) | Submit registration metadata. Creates or updates a PENDING record. Does not approve |
-| GET, POST, DELETE | /facilities/:id/staff | F:ADMIN(id) | List, invite, remove staff (`facility_memberships`). Invitations grant no access until accepted |
+| GET | /facilities/:id/staff | F:ADMIN(id) | List staff, every status (INVITED, ACTIVE, REMOVED) |
+| POST | /facilities/:id/staff | F:ADMIN(id) | Invite staff by internal `userId` (see note below). Creates an INVITED membership, which grants no access until accepted |
+| POST | /facilities/:id/staff/accept | Auth | The invited user accepts their own INVITED membership, which becomes ACTIVE. No one may accept on another user's behalf. Idempotent if already ACTIVE; 409 `CONFLICT` if the membership was REMOVED |
+| DELETE | /facilities/:id/staff/:userId | F:ADMIN(id) | Soft-removes an ACTIVE membership (sets REMOVED; the row is never deleted, so a later re-invite reuses it). Refused with 409 `LAST_FACILITY_ADMIN` if it would leave the facility with no ACTIVE FACILITY_ADMIN |
 | GET | /blood/units | F:HOSPITAL or F:BLOOD_BANK(facilityId) | Paginated. `facilityId` query is required and must be a facility where the caller has an ACTIVE membership |
 | POST | /blood/units | Same, own facility | Register a unit. `facilityId` must equal a facility the caller belongs to. `unit_uid` is issued by the server |
 | PATCH | /blood/units/:id | Same, unit's custodian facility | Update storage location or facility code. Not blood group or expiry after issue |
@@ -291,6 +294,10 @@ No user endpoint can trigger a system-only transition. Terminal states accept no
 | POST | /blood/units/:id/issue | Same, unit's custodian facility | Body `{ requestId }`. Requires an ACTIVE reservation for that request |
 | POST | /blood/units/:id/transfer | F:ADMIN of the current custodian facility | Controlled transfer, see 7.2 |
 | GET | /blood/units/:id/events | Custodian facility staff / ADMIN | Custody trail (`blood_unit_events`) |
+
+Staff are invited by internal `userId` in v1: there is no lookup-by-email or other discovery endpoint yet, so the inviter must already know the invitee's id through some other channel. This is a known limitation, deferred to a later batch, not a design decision.
+
+Audited: `FACILITY_REGISTERED` (self-registration), `FACILITY_VERIFICATION_SUBMITTED` (verification submission - every submission, not only the first), `STAFF_INVITED`, `STAFF_INVITATION_ACCEPTED` (a genuine INVITED to ACTIVE transition only, not an idempotent repeat), `STAFF_REMOVED`.
 
 ### 7.1 Ownership, scoping and concurrency
 - **Facility ownership is enforced on every unit and reservation operation.** The server loads the unit (or reservation), reads its current custodian `facility_id`, and requires an ACTIVE membership of the caller in that facility and a VERIFIED facility. A `facilityId` supplied by the client is only a filter that must be checked, never a source of authority. Staff can therefore operate only on units belonging to their own authorized facility, with the controlled transfer operation as the only exception. A unit of another facility returns 404.

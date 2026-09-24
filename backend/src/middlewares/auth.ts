@@ -54,6 +54,36 @@ export function requireAuth(options: RequireAuthOptions = {}) {
   };
 }
 
+/**
+ * For a route that is public but behaves differently for a signed-in caller (API.md section 7:
+ * "Pub (VERIFIED, public fields) / F:ADMIN(id) (full)"). Unlike requireAuth(), this never rejects:
+ * an absent, expired, or unsynchronized session simply leaves req.auth unset, and the route falls
+ * back to its public behavior. A blocked account (SUSPENDED/DELETION_PENDING/ANONYMIZED) is also
+ * just treated as anonymous here, never as an error - the caller only loses the extra access their
+ * status would otherwise have blocked anyway.
+ */
+export function optionalAuth() {
+  return async function optionalAuthMiddleware(req: Request, _res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { userId: clerkUserId, isAuthenticated } = getAuth(req);
+      if (!isAuthenticated || !clerkUserId) {
+        next();
+        return;
+      }
+      const user = await usersRepository.findByClerkUserId(clerkUserId);
+      if (!user || user.status !== 'ACTIVE') {
+        next();
+        return;
+      }
+      const roles = await userRolesRepository.listRoleCodesForUser(user.id);
+      req.auth = { userId: user.id, clerkUserId, status: user.status, roles };
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
 /** Role:X (API.md section 2). Must run after requireAuth() on the same route. */
 export function requireRole(...allowed: readonly RoleCode[]) {
   return function requireRoleMiddleware(req: Request, _res: Response, next: NextFunction): void {
