@@ -2,7 +2,7 @@
 
 Design only. No controllers, code or migrations exist yet. This revision aligns the API with the finalized ARCHITECTURE.md and DATABASE.md.
 
-Business endpoints live under `/api/v1`. JSON only. Auth is a Clerk session JWT in `Authorization: Bearer`, verified on the backend for every private route. Authorization is always evaluated from our database, never from JWT claims or client-supplied role data.
+Business endpoints live under `/api/v1`. JSON only. Auth is a Clerk session JWT in `Authorization: Bearer`, verified on the backend for every private route. Authorization is always evaluated from our database, never from JWT claims or client-supplied role data. A request with a valid Clerk session but no synchronized `users` row yet (the `user.created` webhook has not been processed) is `401 UNAUTHENTICATED`, the same as no session at all: there is no local identity yet to authorize (section 4).
 
 ## 1. Conventions
 
@@ -89,9 +89,11 @@ Both are excluded from auth, may be excluded from request logging noise, carry `
 | Method | Path | Auth | Notes |
 |---|---|---|---|
 | GET | /auth/me | Auth | Current user, global roles, active facility memberships, donor and patient verification statuses |
-| PATCH | /users/me | Auth | Update profile fields (Zod-validated) |
+| PATCH | /users/me | Auth | See 4.2 |
 | POST | /users/me/roles | Auth | See 4.1 |
-| DELETE | /users/me | Auth | Creates a `data_deletion_requests` row and sets `DELETION_PENDING`. Anonymization runs as a job (DATABASE.md section 8), not a hard delete |
+| DELETE | /users/me | Auth | See 4.3 |
+
+A Clerk session with no synchronized `users` row yet (see the note above section 1) is `401 UNAUTHENTICATED` on every route in this section, including `/auth/me`.
 
 ### 4.1 POST /users/me/roles (self-enrolment)
 - Body: `{ "role": "PATIENT" | "DONOR" }`. The client must explicitly choose one. Strict Zod enum; a missing or unknown role is `VALIDATION_ERROR`.
@@ -99,6 +101,16 @@ Both are excluded from auth, may be excluded from request logging noise, carry `
 - **Never allows privileged roles.** `ADMIN`, `SUPER_ADMIN`, and any facility role (HOSPITAL, BLOOD_BANK, FACILITY_ADMIN, STAFF) are rejected with 403 `ROLE_NOT_SELF_ASSIGNABLE`. Facility access comes only through `facility_memberships` (facility creation or invitation), and ADMIN/SUPER_ADMIN only through the bootstrap or SUPER_ADMIN (`POST /admin/roles`).
 - Suspended or anonymized users are rejected with 403.
 - **Audited:** a first enrolment writes an `ROLE_ENROLLED` audit row (actor = subject = the user, role, requestId). No-op repeats are not audited.
+
+### 4.2 PATCH /users/me
+- Body (Zod-validated, strict): `fullName`, `dateOfBirth`, `address`, each optional. Unknown fields are rejected.
+- **`email` and `phone` are never accepted here.** Both are Clerk-controlled: they are synchronized only from the `user.created`/`user.updated` webhook (section 12), so this endpoint cannot create a second, disagreeing source of truth for either field. Changing an email or phone number happens through Clerk, and the next webhook delivery syncs it.
+
+### 4.3 DELETE /users/me
+- Creates a `data_deletion_requests` row (`source = USER_REQUEST`) and sets `users.status = DELETION_PENDING`. Anonymization runs as a job (DATABASE.md section 8), not a hard delete.
+- **Idempotent.** If a request is already `PENDING` for this user (including one created a moment earlier by the Clerk `user.deleted` webhook, `source = CLERK_WEBHOOK`), this returns the existing request instead of creating a second one or erroring.
+- **The one exception to the DELETION_PENDING rule above section 1's note:** this specific endpoint accepts a caller whose own status is already `DELETION_PENDING`, precisely so the idempotent repeat call above can succeed. No other endpoint accepts a `DELETION_PENDING` caller.
+- **Audited:** a genuinely new pending request writes a `DATA_DELETION_REQUESTED` audit row (actor = the user for `USER_REQUEST`, none/system for `CLERK_WEBHOOK`). An idempotent repeat is not audited again.
 
 ## 5. Donors and matches
 

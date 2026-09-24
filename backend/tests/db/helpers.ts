@@ -89,6 +89,19 @@ export async function createUser(overrides: { clerkUserId?: string } = {}): Prom
   return row!.id;
 }
 
+/**
+ * The `test` branch receives no seed data (DATABASE.md section 11) - the reference seed
+ * (`roles`, `settings`) is dev-only. tests/db/auth.db.test.ts is the first test file whose
+ * application code (userRoles.repository.ts's enrollRole) itself depends on `roles` having all 4
+ * codes. This inserts exactly those 4 rows, idempotently, scoped to this run only: `roles` is
+ * already in reset-tables.ts's allowlist, so the next full test:db run's global reset (setup.ts)
+ * truncates it again. This is a test fixture, not a new seeding mechanism, and never touches
+ * scripts/db-seed.ts or src/db/seed/*.
+ */
+export async function ensureRoleCodes(): Promise<void> {
+  await sql`INSERT INTO roles (code) VALUES ('PATIENT'), ('DONOR'), ('ADMIN'), ('SUPER_ADMIN') ON CONFLICT (code) DO NOTHING`;
+}
+
 export async function createDonor(userId: string, overrides: { bloodGroup?: string } = {}): Promise<string> {
   const bloodGroup = overrides.bloodGroup ?? 'O_POS';
   const [row] = await sql<{ id: string }[]>`INSERT INTO donors (user_id, blood_group) VALUES (${userId}, ${bloodGroup}) RETURNING id`;

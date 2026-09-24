@@ -6,14 +6,18 @@ dotenv.config({ quiet: true });
 
 // Phase 2 read only four variables and deliberately left DATABASE_URL unparsed, so nothing could connect to a
 // service with it before a database existed. Batch 3.6 adds it: the running server now holds its own
-// connection (src/db/connection.ts) and needs it to start. The other reserved variables in .env.example
-// (CLERK_*, GOOGLE_MAPS_API_KEY, ...) are still deliberately not parsed here.
+// connection (src/db/connection.ts) and needs it to start. Batch 3.10 adds the two Clerk variables the
+// server now needs at startup: CLERK_SECRET_KEY (clerkMiddleware(), app.ts) and CLERK_WEBHOOK_SECRET
+// (the Svix verification in webhooks/clerkSignature.ts). The other reserved variables in .env.example
+// (GOOGLE_MAPS_API_KEY, ML_SERVICE_*, ...) are still deliberately not parsed here.
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(5000),
   FRONTEND_URL: z.url({ protocol: /^https?$/ }).default('http://localhost:5173'),
   BACKEND_URL: z.url({ protocol: /^https?$/ }).default('http://localhost:5000'),
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+  CLERK_SECRET_KEY: z.string().min(1, 'CLERK_SECRET_KEY is required.'),
+  CLERK_WEBHOOK_SECRET: z.string().min(1, 'CLERK_WEBHOOK_SECRET is required.'),
 });
 
 export type Env = z.infer<typeof envSchema>;
